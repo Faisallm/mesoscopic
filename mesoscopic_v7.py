@@ -58,7 +58,7 @@ class Mesoscale:
                 # If their is an intrusion, I want the aggregate to be randomly translated to a new
                 # location for placing for atleast 500 times.
                 self.loc, self._condition = self._identify_aggregate_and_itz(self.agg)
-                print(f"Local: {self.loc}")
+#                 print(f"Local: {self.loc}")
                 # checking if the aggregate was placed
                 if not self._condition:
                     # break out of loop
@@ -74,7 +74,7 @@ class Mesoscale:
         
         
         #print(f"Local: {self.loc}")
-        #print(f"Global: {self.glob}")
+        print(f"Global: {self.glob}")
         
     def _minimum_and_maximum(self, agg):
         """According to the new coordinates of the vertices of the...
@@ -110,17 +110,16 @@ class Mesoscale:
 
         ((x_min, y_min, z_min), (x_max, y_max, z_max)) = self._minimum_and_maximum(aggregate)
 
-        # bounding box of the newly placed aggregate (consideri)
-        # I do not need this
+        # bounding box of the newly placed aggregate (consider aggregate elemennts).
         (ir, jr, kr) = np.max([0, x_min//self.e]), np.max([0, y_min//self.e]), np.max([0, z_min//self.e])
         (Ir, Jr, Kr) = np.min([self.l, x_max//self.e]), np.min([self.m, y_max//self.e]), np.min([self.n, z_max//self.e])
 
         # bounding box of the newly placed aggregate considering ITZ elements
-        (ib, jb, kb) = np.max([0, x_min//self.e-1]), \
-            np.max([0, y_min//self.e-1]), np.max([0, z_min//self.e-1])
+        (ib, jb, kb) = np.max([0, (x_min//self.e)-1]), \
+            np.max([0, (y_min//self.e)-1]), np.max([0, (z_min//self.e)-1])
         
-        (Ib, Jb, Kb) = np.min([self.l, x_max//self.e+1]),\
-            np.min([self.m, y_max//self.e+1]), np.min([self.n, z_max//self.e+1])
+        (Ib, Jb, Kb) = np.min([self.l, (x_max//self.e)+1]),\
+            np.min([self.m, (y_max//self.e)+1]), np.min([self.n, (z_max//self.e)+1])
 
         return ((ir, jr, kr), (Ir, Jr, Kr)), ((ib, jb, kb), (Ib, Jb, Kb)) 
     
@@ -160,7 +159,8 @@ class Mesoscale:
         return intersection_count % 2 == 1
     
     
-    # this can be an area of concern(!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!).
+    # I now agree that this function is correct.
+    # it makes sense now.
     def _local_grid(self, lower_limit, upper_limit):
         """
         We have to generate the local background grid from the global
@@ -168,16 +168,18 @@ class Mesoscale:
 
         Always remember that range excludes the outer limit, so don't
         forget to add + 1.
+        All elements in the local background grid are initialized
+        as mortar elements.
         """
-
+        # they are being mapped to int.
         (ib, jb, kb), (Ib, Jb, Kb) = map(int, lower_limit), map(int, upper_limit)
 
         ooo_array = []
-        for i in range(0, (Ib-ib)+1):
+        for i in range(ib, Ib+1):
             oo_array = []
-            for j in range(0, (Jb-jb)+1):
+            for j in range(jb, Jb+1):
                 o_array = []
-                for k in range(0, (Kb-kb)+1):
+                for k in range(kb, Kb+1):
                     o_array.append(1)
                 oo_array.append(o_array)
             ooo_array.append(oo_array)
@@ -245,31 +247,49 @@ class Mesoscale:
         and then the coordinates of the center points are obtained (eq 4).
         """
 
+        # a section of the global matrix
         ((ir, jr, kr), (Ir, Jr, Kr)), ((ib, jb, kb), (Ib, Jb, Kb)) = self._section_global_background_grid(agg)
         local_grids = self._local_grid((ib, jb, kb), (Ib, Jb, Kb))
+#         print(local_grids.shape)
         intrusion = self._aggregate_intrusion(ib, Ib, jb, Jb, kb, Kb)
         intru = False
 
         ir, jr, kr = int(ir), int(jr), int(kr)
         Ir, Jr, Kr = int(Ir), int(Jr), int(Kr)
-        for i in range(ir-1, Ir):
-            for j in range(jr-1, Jr):
-                for k in range(kr-1, Kr):
+        ib, jb, kb = int(ib), int(jb), int(kb)
+        Ib, Jb, Kb = int(Ib), int(Jb), int(Kb)
+        for i in range(ib, Ib):
+            for j in range(jb, Jb):
+                for k in range(kb, Kb):
                     global_element = i, j, k
                     center_point = self._element_central_point(i, j, k, self.e)
-                    li, lj, lk = (i-(ir-1), j-(jr-1), k-(kr-1))
+                    li, lj, lk = (i-ib, j-jb, k-kb)
 
                     # if the element is aggregate
                     if self._point_in_polyhedron(center_point, agg):
+                        
                         # aggregate intrusion detection.
                         if not intrusion:
                             # change the global matrix
                             self.glob[i][j][k] = 3
                             # change the local matrix
-                            local_grids[li][lj][lk] = 3
+                            # how do I know that its changing the correct position in the global matrix?
+                            local_grids[li][lj][lk] = 3 
                         else:
                             intru = True
                             break
+                            
+#                     elif local_grids[li][lj][lk] == 1 and self._is_adjacent_to_aggregate(local_grids, li, lj, lk):
+#                         # change element in local to ITZ.
+#                         local_grids[li][lj][lk] = 2
+#                         # change corresponding element in global to ITZ.
+#                         self.glob[i][j][k] = 2
+#                     else:
+#                         # change element in local to ITZ.
+#                         local_grids[li][lj][lk] = 1
+#                         # change corresponding element in global to ITZ.
+#                         self.glob[i][j][k] = 1
+                        
                 if intru:
                     break
             if intru:
@@ -278,13 +298,16 @@ class Mesoscale:
         ib, jb, kb = int(ib), int(jb), int(kb)
         Ib, Jb, Kb = int(Ib), int(Jb), int(Kb)
         if not intru:
-            for i in range(ib-1, Ib):
-                for j in range(jb-1, Jb):
-                    for k in range(kb-1, Kb):
+            for i in range(ib, Ib):
+                for j in range(jb, Jb):
+                    for k in range(kb, Kb):
                         # coordinates of the global grid
                         global_element = i, j, k
                         # coordinates of the local background grid
-                        li, lj, lk = (i-(ib-1), j-(jb-1), k-(kb-1))
+                        li, lj, lk = (i-ib, j-jb, k-kb)
+#                         print("itz")
+#                         print(f"global: i: {i}, j:{j}, k: {k}")
+#                         print(f"local: li: {li}, lj:{lj}, lk: {lk}")
 
                         if intru:
                             break
@@ -294,7 +317,7 @@ class Mesoscale:
                                 # change element in local to ITZ.
                                 local_grids[li][lj][lk] = 2
                                 # change corresponding element in global to ITZ.
-                                self.glob[i][j][k] = 2    
+                                self.glob[i][j][k] = 2   
                     if intru:
                         break
 
@@ -422,7 +445,7 @@ class Mesoscale:
     
         
     def _generate_points(self, radius):
-            """This function is responsible for the generation of the coordinates.
+            """This function is responsible for the generation of the coordinates
             (x, y, z) of the vertex of a polygon.
             radius: radius of the aggregate."""
 
