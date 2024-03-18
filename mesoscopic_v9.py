@@ -2,6 +2,7 @@ import numpy as np
 import random
 import math
 
+
 class Mesoscale:
     
     
@@ -32,26 +33,49 @@ class Mesoscale:
         
         # aggregate size ranges
         self.aggregate_size_ranges = [[5, 10], [10, 15], [15, 20]]
+#         self.aggregate_size_ranges = [[0.15, 0.300], [0.300, 0.6], [0.6, 1.18],
+#             [1.18, 2.36], [2.36, 4.75], [4.75, 9.5]]
+#         self.aggregate_size_ranges = [[4.75, 9.5], [9.5, 12.5], [12.5, 20.0]]
+    
+        self.volume_fractions = [self._aggregate_volume_fraction(i) for i in self.aggregate_size_ranges]
+#         print(self.volume_fractions)
         
-        self.probabilities = [self._fuller_curve(i) for i in self.aggregate_size_ranges]
+        self.agg_fraction = [int(i * self.number) for i in self.volume_fractions]
+#         print(self.agg_fraction)
         
-        self.aggs = [self._generate_polyhedron(dmin, dmax) \
-                     for dmin, dmax in random.choices([i for i in self.aggregate_size_ranges], weights=self.probabilities) \
-                     for j in range(self.number)]
+        self.aggs = []
+        
+        for i, size in enumerate(self.aggregate_size_ranges):
+            # we are generating a certain num of aggregates for each size_range
+            aggu = [self._generate_polyhedron(size[0], size[1]) for _ in range(self.agg_fraction[i])]
+            
+            for agger in aggu:
+                self.aggs.append(agger)
+                
+            
+#         print(f"Number of generated aggregates: {len(self.aggs)}")
+#         print(self.aggs)
+        
+#         self.probabilities = [self._fuller_curve(i) for i in self.aggregate_size_ranges]
+        
+#         self.aggs = [self._generate_polyhedron(dmin, dmax) \
+#                      for dmin, dmax in random.choices([i for i in self.aggregate_size_ranges], weights=self.probabilities) \
+#                      for j in range(self.number)]
         
         # aggregates arranged in order of decreasing size.
         self.arranged_aggs = sorted(self.aggs, key=lambda x: self._polyhedral_area(x), reverse=True)
         
-        agg1 = self.arranged_aggs[0]
+#         agg1 = self.arranged_aggs[0]
         
-        self.translated_agg = self._translate(agg1,
-                                          self._random_translation_point(self.l, self.m, self.n, self.e))
+#         self.translated_agg = self._translate(agg1,
+#                                           self._random_translation_point(self.l, self.m, self.n, self.e))
         
         # testing
+        self.agg_counts = 0
         for i, a in enumerate(self.arranged_aggs):
             self._condition = True
             self._count = 0
-            while self._condition and self._count < 100:
+            while self._condition and self._count < 60:
                 self.agg = self._translate(a,
                                           self._random_translation_point(self.l, self.m, self.n, self.e))
                 # local grid
@@ -64,17 +88,48 @@ class Mesoscale:
                     # break out of loop
                     self._condition = False
                     self._count = 0
+                    self.agg_counts += 1
                     print("no intrusion")
                 else:
                     self._count += 1;
                     print("intrusion detected!")
-            # to carry out the same check for other aggregates        
+            # to carry out the same check for other aggregates
+            
+            if not self._condition:
+                print(f"Placed #{self.agg_counts} aggregate.")
+                
             self._condition = True
-            print(f"Placed #{i+1} aggregate.")
+            
         
         
         #print(f"Local: {self.loc}")
-        #print(f"Global: {self.glob}")
+        print(f"Global: {self.glob}")
+        
+    
+    def _aggregate_volume_fraction(self, aggregate_size_range):
+        """This function calculates the volume fraction of a 
+        particular aggregate size range (di+1, di).
+        
+        The aggregate content of concrete is closely related to the size
+        distribution of aggregates, which affect the macroscopic mechanical
+        properties of concrete."""
+        
+        size1, size2 = aggregate_size_range[0], aggregate_size_range[1]
+        
+        pdii, pdi = self._fuller(size2), self._fuller(size1)
+        
+        pdmax, pdmin = self._fuller(self.dmax), self._fuller(self.dmin)
+#         print(((pdii - pdi) / (pdmax - pdmin))*-1)
+        
+        return ((pdii - pdi) / (pdmax - pdmin))
+    
+    def _fuller(self, d):
+        # these values do not change.
+        n = 0.5
+        # upper limit of aggregate size
+        D = 20
+        return ((d/D)**n)
+        
         
     def _minimum_and_maximum(self, agg):
         """According to the new coordinates of the vertices of the...
@@ -110,17 +165,17 @@ class Mesoscale:
 
         ((x_min, y_min, z_min), (x_max, y_max, z_max)) = self._minimum_and_maximum(aggregate)
 
-        # bounding box of the newly placed aggregate (consideri)
-        # I do not need this
+        # bounding box of the newly placed aggregate (consider aggregate elemennts).
         (ir, jr, kr) = np.max([0, x_min//self.e]), np.max([0, y_min//self.e]), np.max([0, z_min//self.e])
-        (Ir, Jr, Kr) = np.min([self.l, x_max//self.e]), np.min([self.m, y_max//self.e]), np.min([self.n, z_max//self.e])
+        (Ir, Jr, Kr) = np.min([self.l-1, x_max//self.e]), np.min([self.m-1, y_max//self.e]), np.min([self.n-1, z_max//self.e])
 
         # bounding box of the newly placed aggregate considering ITZ elements
-        (ib, jb, kb) = np.max([0, x_min//self.e-1]), \
-            np.max([0, y_min//self.e-1]), np.max([0, z_min//self.e-1])
+        (ib, jb, kb) = np.max([0, (x_min//self.e)-1]), \
+            np.max([0, (y_min//self.e)-1]), np.max([0, (z_min//self.e)-1])
         
-        (Ib, Jb, Kb) = np.min([self.l, x_max//self.e+1]),\
-            np.min([self.m, y_max//self.e+1]), np.min([self.n, z_max//self.e+1])
+#         print(f"x_max: {(x_max//1)+1}, y_max: {(y_max//1)+1}, z_max: {(z_max//1)+1}")
+        (Ib, Jb, Kb) = np.min([self.l-1, (x_max//self.e)+1]),\
+            np.min([self.m-1, (y_max//self.e)+1]), np.min([self.n-1, (z_max//self.e)+1])
 
         return ((ir, jr, kr), (Ir, Jr, Kr)), ((ib, jb, kb), (Ib, Jb, Kb)) 
     
@@ -160,7 +215,8 @@ class Mesoscale:
         return intersection_count % 2 == 1
     
     
-    # this can be an area of concern(!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!).
+    # I now agree that this function is correct.
+    # it makes sense now.
     def _local_grid(self, lower_limit, upper_limit):
         """
         We have to generate the local background grid from the global
@@ -168,16 +224,18 @@ class Mesoscale:
 
         Always remember that range excludes the outer limit, so don't
         forget to add + 1.
+        All elements in the local background grid are initialized
+        as mortar elements.
         """
-
+        # they are being mapped to int.
         (ib, jb, kb), (Ib, Jb, Kb) = map(int, lower_limit), map(int, upper_limit)
 
         ooo_array = []
-        for i in range(0, (Ib-ib)+1):
+        for i in range(0, (Ib-ib)):
             oo_array = []
-            for j in range(0, (Jb-jb)+1):
+            for j in range(0, (Jb-jb)):
                 o_array = []
-                for k in range(0, (Kb-kb)+1):
+                for k in range(0, (Kb-kb)):
                     o_array.append(1)
                 oo_array.append(o_array)
             ooo_array.append(oo_array)
@@ -220,10 +278,11 @@ class Mesoscale:
         ir, jr, kr = int(ir), int(jr), int(kr)
         Ir, Jr, Kr = int(Ir), int(Jr), int(Kr)
         
-        # this function uses alot of compute unneccessarily.
-        for i in range(ir-1, Ir):
-            for j in range(jr-1, Jr):
-                for k in range(kr-1, Kr):
+        # this function uses alot of compute unneccessarily (hence the introduction of breaks).
+        for i in range(ir, Ir+1):
+            for j in range(jr, Jr+1):
+                for k in range(kr, Kr+1):
+#                     print(f"i: {i}, j: {j}, k: {k}")
                     if self.glob[i][j][k] == 3 or self.glob[i][j][k] == 2: 
                         contains = True
                         break
@@ -233,7 +292,6 @@ class Mesoscale:
                 break
                         
         return contains
-    
     
     def _identify_aggregate_and_itz(self, agg):
         """
@@ -245,31 +303,47 @@ class Mesoscale:
         and then the coordinates of the center points are obtained (eq 4).
         """
 
+        # a section of the global matrix
         ((ir, jr, kr), (Ir, Jr, Kr)), ((ib, jb, kb), (Ib, Jb, Kb)) = self._section_global_background_grid(agg)
         local_grids = self._local_grid((ib, jb, kb), (Ib, Jb, Kb))
+#         print(local_grids.shape)
         intrusion = self._aggregate_intrusion(ib, Ib, jb, Jb, kb, Kb)
         intru = False
 
         ir, jr, kr = int(ir), int(jr), int(kr)
         Ir, Jr, Kr = int(Ir), int(Jr), int(Kr)
-        for i in range(ir-1, Ir):
-            for j in range(jr-1, Jr):
-                for k in range(kr-1, Kr):
+        for i in range(ir, Ir+1):
+            for j in range(jr, Jr+1):
+                for k in range(kr, Kr+1):
                     global_element = i, j, k
                     center_point = self._element_central_point(i, j, k, self.e)
-                    li, lj, lk = (i-(ir-1), j-(jr-1), k-(kr-1))
+                    li, lj, lk = (i-ir, j-jr, k-kr)
 
                     # if the element is aggregate
                     if self._point_in_polyhedron(center_point, agg):
+                        
                         # aggregate intrusion detection.
                         if not intrusion:
                             # change the global matrix
                             self.glob[i][j][k] = 3
                             # change the local matrix
-                            local_grids[li][lj][lk] = 3
+                            # how do I know that its changing the correct position in the global matrix?
+                            local_grids[li][lj][lk] = 3 
                         else:
                             intru = True
                             break
+                            
+#                     elif local_grids[li][lj][lk] == 1 and self._is_adjacent_to_aggregate(local_grids, li, lj, lk):
+#                         # change element in local to ITZ.
+#                         local_grids[li][lj][lk] = 2
+#                         # change corresponding element in global to ITZ.
+#                         self.glob[i][j][k] = 2
+#                     else:
+#                         # change element in local to ITZ.
+#                         local_grids[li][lj][lk] = 1
+#                         # change corresponding element in global to ITZ.
+#                         self.glob[i][j][k] = 1
+                        
                 if intru:
                     break
             if intru:
@@ -278,23 +352,24 @@ class Mesoscale:
         ib, jb, kb = int(ib), int(jb), int(kb)
         Ib, Jb, Kb = int(Ib), int(Jb), int(Kb)
         if not intru:
-            for i in range(ib-1, Ib):
-                for j in range(jb-1, Jb):
-                    for k in range(kb-1, Kb):
+            for i in range(ib, Ib+1):
+                for j in range(jb, Jb+1):
+                    for k in range(kb, Kb+1):
                         # coordinates of the global grid
                         global_element = i, j, k
                         # coordinates of the local background grid
-                        li, lj, lk = (i-(ib-1), j-(jb-1), k-(kb-1))
+                        li, lj, lk = (i-ib, j-jb, k-kb)
+#                         print("itz")
+#                         print(f"global: i: {i}, j:{j}, k: {k}")
+#                         print(f"local: li: {li}, lj:{lj}, lk: {lk}")
 
                         if intru:
                             break
 
-                        if local_grids[li][lj][lk] == 1:
-                            if self._is_adjacent_to_aggregate(local_grids, li, lj, lk):
-                                # change element in local to ITZ.
-                                local_grids[li][lj][lk] = 2
+                        if self.glob[i][j][k] == 1:
+                            if self._is_adjacent_to_aggregate(self.glob, i, j, k):
                                 # change corresponding element in global to ITZ.
-                                self.glob[i][j][k] = 2    
+                                self.glob[i][j][k] = 2   
                     if intru:
                         break
 
@@ -302,6 +377,7 @@ class Mesoscale:
                     break
 
         return local_grids, intru
+    
     
     
     def _locate_element(self, x: int, y: int, z: int, e):
